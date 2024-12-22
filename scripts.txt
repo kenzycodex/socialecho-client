@@ -1,0 +1,929 @@
+.eslintrc.json
+
+{
+    "env": {
+      "browser": true,
+      "es2021": true
+    },
+    "extends": [
+      "react-app",
+      "eslint:recommended"
+    ],
+    "parserOptions": {
+      "ecmaVersion": 12,
+      "sourceType": "module"
+    },
+    "rules": {}
+  }
+  
+src/components/admin/Logs.jsx
+
+import { useEffect, useState } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import {
+  getLogsAction,
+  deleteLogsAction,
+} from "../../redux/actions/adminActions";
+import CurrentTime from "../shared/CurrentTime";
+import ButtonLoadingSpinner from "../loader/ButtonLoadingSpinner";
+import CommonLoading from "../loader/CommonLoading";
+import { FcRefresh } from "react-icons/fc";
+
+const Logs = () => {
+  const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
+
+  const dispatch = useDispatch();
+  const logs = useSelector((state) => state.admin?.logs);
+
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      await dispatch(getLogsAction());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCleanup = async () => {
+    try {
+      setClearing(true);
+      await dispatch(deleteLogsAction());
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setLoading(true);
+      await fetchLogs();
+    } catch (error) {}
+  };
+
+  useEffect(() => {
+    fetchLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logs?.length]);
+
+  if (loading || !logs) {
+    return (
+      <div className="flex items-center justify-center mt-5">
+        <CommonLoading />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white flex flex-col items-center justify-center mt-3 rounded-md">
+      <div className="p-4 shadow-md rounded relative xl:min-w-[1200px] lg:min-w-[1000px] md:min-w-[800px]">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-gray-800">
+            User Activity Logs
+          </h1>
+          <CurrentTime />
+        </div>
+
+        <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-2">
+          <div className="text-sm italic text-gray-600">{`Showing ${logs.length} items from the last 7 days`}</div>
+
+          <div className="flex items-center space-x-2">
+            <button onClick={handleRefresh}>
+              <FcRefresh />
+            </button>
+            <button
+              className={`bg-blue-500 text-white text-sm py-2 px-4 rounded hover:bg-blue-700 ${
+                clearing ? "opacity-50 cursor-not-allowed" : ""
+              } ${logs.length === 0 ? "hidden" : ""}`}
+              onClick={handleCleanup}
+              disabled={clearing || logs.length === 0}
+            >
+              {clearing ? (
+                <ButtonLoadingSpinner loadingText="Clearing..." />
+              ) : (
+                "Clear Logs"
+              )}
+            </button>
+          </div>
+        </div>
+
+        {!loading ? (
+          logs.length === 0 ? (
+            <div className="text-gray-500 text-lg">No logs found</div>
+          ) : (
+            <>
+              <div className="h-[430px] relative overflow-auto">
+                <div className="w-full rounded">
+                  <div className="grid grid-cols-5 gap-5 items-center border-b py-2 font-semibold text-gray-800">
+                    <p className="text-center">Timestamp</p>
+                    <p>Message</p>
+                    <p>Email Used</p>
+                    <p>Level</p>
+                    <p>Context Data</p>
+                  </div>
+                  {logs.map((log) => (
+                    <div
+                      key={log._id}
+                      className="grid grid-cols-5 gap-5 items-center border-b py-2 text-sm text-gray-700"
+                    >
+                      <span className="flex-col justify-center items-center text-center font-mono">
+                        <p>{log.relativeTimestamp}</p>
+                        <p className="text-xs">{log.formattedTimestamp}</p>
+                      </span>
+                      <td
+                        className={`${
+                          log.level === "info"
+                            ? "text-blue-500"
+                            : log.level === "warn"
+                            ? "text-orange-500"
+                            : log.level === "error"
+                            ? "text-red-600"
+                            : ""
+                        }`}
+                      >
+                        <span className="capitalize">{log.type}: </span>
+                        <span>{log.message}</span>
+                      </td>
+                      <p>{log.email}</p>
+                      <td className="">
+                        <span
+                          className={`rounded-full px-2 py-1 text-sm font-semibold ${
+                            log.level === "error"
+                              ? "bg-red-500 text-white"
+                              : log.level === "warn"
+                              ? "bg-orange-500 text-white"
+                              : "bg-blue-500 text-white"
+                          }`}
+                        >
+                          {log.level}
+                        </span>
+                      </td>
+                      <td className="">
+                        <ul className="list-disc list-inside">
+                          {log.contextData &&
+                            Object.entries(log.contextData).map(
+                              ([key, value]) => (
+                                <li key={key}>
+                                  <span className="font-medium text-blue-500">
+                                    {key}:{" "}
+                                  </span>
+                                  {value}
+                                </li>
+                              )
+                            )}
+                        </ul>
+                      </td>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-center text-sm italic text-gray-600 mt-2">
+                logs are automatically deleted after 7 days
+              </div>
+            </>
+          )
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
+export default Logs;
+
+src/redux/actions/adminActions.js
+import * as api from "../api/adminAPI";
+import * as types from "../constants/adminConstants";
+
+export const signInAction = (credential) => async (dispatch) => {
+  try {
+    const { error, data } = await api.signIn(credential);
+    if (error) {
+      throw new Error(error);
+    }
+    localStorage.setItem("admin", JSON.stringify(data));
+    dispatch({
+      type: types.SIGN_IN_SUCCESS,
+    });
+  } catch (error) {
+    dispatch({
+      type: types.SIGN_IN_FAIL,
+      payload: error.message,
+    });
+  }
+};
+
+export const logoutAction = () => async (dispatch) => {
+  try {
+    localStorage.removeItem("admin");
+    dispatch({
+      type: types.LOGOUT_SUCCESS,
+    });
+  } catch (error) {}
+};
+
+export const getLogsAction = () => async (dispatch) => {
+  try {
+    const { error, data } = await api.getLogs();
+    if (error) {
+      throw new Error(error);
+    }
+    dispatch({
+      type: types.GET_LOGS_SUCCESS,
+      payload: data,
+    });
+  } catch (error) {
+    dispatch({
+      type: types.GET_LOGS_FAIL,
+      payload: error.message,
+    });
+  }
+};
+
+export const deleteLogsAction = () => async (dispatch) => {
+  try {
+    const { error } = await api.deleteLogs();
+    if (error) {
+      throw new Error(error);
+    }
+    dispatch({
+      type: types.DELETE_LOGS_SUCCESS,
+    });
+  } catch (error) {
+    dispatch({
+      type: types.DELETE_LOGS_FAIL,
+      payload: error.message,
+    });
+  }
+};
+
+export const getServicePreferencesAction = () => async (dispatch) => {
+  try {
+    const { error, data } = await api.getServicePreferences();
+    if (error) {
+      throw new Error(error);
+    }
+    dispatch({
+      type: types.GET_SERVICE_PREFERENCES_SUCCESS,
+      payload: data,
+    });
+  } catch (error) {
+    dispatch({
+      type: types.GET_SERVICE_PREFERENCES_FAIL,
+      payload: error.message,
+    });
+  }
+};
+
+export const updateServicePreferencesAction =
+  (preferences) => async (dispatch) => {
+    try {
+      const { error } = await api.updateServicePreferences(preferences);
+      if (error) {
+        throw new Error(error);
+      }
+      dispatch({
+        type: types.UPDATE_SERVICE_PREFERENCES_SUCCESS,
+      });
+    } catch (error) {
+      dispatch({
+        type: types.UPDATE_SERVICE_PREFERENCES_FAIL,
+        payload: error.message,
+      });
+    }
+  };
+
+export const getCommunitiesAction = () => async (dispatch) => {
+  try {
+    const { error, data } = await api.getCommunities();
+    if (error) {
+      throw new Error(error);
+    }
+    dispatch({
+      type: types.GET_COMMUNITIES_SUCCESS,
+      payload: data,
+    });
+  } catch (error) {
+    dispatch({
+      type: types.GET_COMMUNITIES_FAIL,
+      payload: error.message,
+    });
+  }
+};
+
+export const getCommunityAction = (communityId) => async (dispatch) => {
+  try {
+    const { error, data } = await api.getCommunity(communityId);
+    if (error) {
+      throw new Error(error);
+    }
+
+    dispatch({
+      type: types.GET_COMMUNITY_SUCCESS,
+      payload: data,
+    });
+  } catch (error) {
+    dispatch({
+      type: types.GET_COMMUNITY_FAIL,
+      payload: error.message,
+    });
+  }
+};
+
+export const getModeratorsAction = () => async (dispatch) => {
+  try {
+    const { error, data } = await api.getModerators();
+    if (error) {
+      throw new Error(error);
+    }
+    dispatch({
+      type: types.GET_MODERATORS_SUCCESS,
+      payload: data,
+    });
+  } catch (error) {
+    dispatch({
+      type: types.GET_MODERATORS_FAIL,
+      payload: error.message,
+    });
+  }
+};
+
+export const addModeratorAction =
+  (communityId, moderatorId) => async (dispatch) => {
+    try {
+      const { error } = await api.addModerator(communityId, moderatorId);
+      if (error) {
+        throw new Error(error);
+      }
+      dispatch({
+        type: types.ADD_MODERATOR_SUCCESS,
+      });
+    } catch (error) {
+      dispatch({
+        type: types.ADD_MODERATOR_FAIL,
+        payload: error.message,
+      });
+    }
+  };
+
+export const removeModeratorAction =
+  (communityId, moderatorId) => async (dispatch) => {
+    try {
+      const { error } = await api.removeModerator(communityId, moderatorId);
+      if (error) {
+        throw new Error(error);
+      }
+      dispatch({
+        type: types.REMOVE_MODERATOR_SUCCESS,
+      });
+    } catch (error) {
+      dispatch({
+        type: types.REMOVE_MODERATOR_FAIL,
+        payload: error.message,
+      });
+    }
+  };
+
+src/redux/reducers/auth.js
+import * as types from "../constants/authConstants";
+import {
+  GET_COMMUNITY_SUCCESS,
+  GET_COMMUNITY_FAIL,
+} from "../constants/communityConstants";
+
+const initialState = {
+  userData: null,
+  refreshToken: null,
+  accessToken: null,
+  signInError: null,
+  signUpError: [],
+  successMessage: null,
+  isModeratorOfThisCommunity: false,
+  contextAuthData: null,
+  trustedAuthContextData: [],
+  blockedAuthContextData: [],
+  userPreferences: null,
+  contextAuthError: null,
+};
+
+const authReducer = (state = initialState, action) => {
+  const { type, payload } = action;
+
+  switch (type) {
+    case types.SET_ACCESS_TOKEN:
+      return {
+        ...state,
+        accessToken: payload ? payload : null,
+      };
+    case types.SET_REFRESH_TOKEN:
+      return {
+        ...state,
+        refreshToken: payload ? payload : null,
+      };
+    case types.SET_USER_DATA:
+      return {
+        ...state,
+        userData: payload ? payload : null,
+      };
+
+    case types.SIGNUP_SUCCESS:
+      return {
+        ...state,
+        signInError: null,
+        signUpError: [],
+        successMessage: payload ? payload : null,
+      };
+
+    case types.SIGNUP_FAIL:
+      return {
+        ...state,
+        successMessage: null,
+        signInError: null,
+        signUpError: payload ? payload : [],
+      };
+
+    case types.SIGNIN_SUCCESS:
+      return {
+        ...state,
+        userData: payload ? payload.user : null,
+        accessToken: payload ? payload.accessToken : null,
+        refreshToken: payload ? payload.refreshToken : null,
+        signInError: null,
+        successMessage: payload ? payload : null,
+      };
+
+    case types.SIGNIN_FAIL:
+      return {
+        ...state,
+        successMessage: null,
+        signUpError: [],
+        signInError: payload ? payload : null,
+      };
+
+    case types.LOGOUT:
+      return {
+        ...state,
+        userData: null,
+        refreshToken: null,
+        accessToken: null,
+        signInError: null,
+        signUpError: [],
+        successMessage: null,
+        isModeratorOfThisCommunity: false,
+      };
+
+    case types.REFRESH_TOKEN_SUCCESS:
+      return {
+        ...state,
+        accessToken: payload ? payload.accessToken : null,
+        refreshToken: payload ? payload.refreshToken : null,
+      };
+
+    case types.REFRESH_TOKEN_FAIL:
+      return {
+        ...state,
+        userData: null,
+        refreshToken: null,
+        accessToken: null,
+        signUpError: [],
+        signInError: null,
+        successMessage: null,
+        isModeratorOfThisCommunity: false,
+      };
+
+    case GET_COMMUNITY_SUCCESS:
+      const moderators = payload ? payload.moderators : [];
+      const isModeratorOfThisCommunity = moderators.some(
+        (moderator) => moderator === state.userData?._id
+      );
+      return {
+        ...state,
+        isModeratorOfThisCommunity,
+      };
+
+    case GET_COMMUNITY_FAIL:
+      return {
+        ...state,
+        isModeratorOfThisCommunity: false,
+      };
+
+    case types.GET_CONTEXT_AUTH_DATA_SUCCESS:
+      return {
+        ...state,
+        contextAuthData: payload ? payload : null,
+        contextAuthError: null,
+      };
+
+    case types.GET_CONTEXT_AUTH_DATA_FAIL:
+      return {
+        ...state,
+        contextAuthData: null,
+        contextAuthError: payload ? payload : null,
+      };
+
+    case types.GET_TRUSTED_AUTH_CONTEXT_DATA_SUCCESS:
+      return {
+        ...state,
+        trustedAuthContextData: payload ? payload : [],
+        contextAuthError: null,
+      };
+
+    case types.GET_TRUSTED_AUTH_CONTEXT_DATA_FAIL:
+      return {
+        ...state,
+        trustedAuthContextData: [],
+        contextAuthError: payload ? payload : null,
+      };
+
+    case types.GET_USER_PREFERENCES_SUCCESS:
+      return {
+        ...state,
+        userPreferences: payload ? payload : null,
+        contextAuthError: null,
+      };
+
+    case types.GET_USER_PREFERENCES_FAIL:
+      return {
+        ...state,
+        userPreferences: null,
+        contextAuthError: payload ? payload : null,
+      };
+
+    case types.GET_BLOCKED_AUTH_CONTEXT_DATA_SUCCESS:
+      return {
+        ...state,
+        blockedAuthContextData: payload ? payload : [],
+        contextAuthError: null,
+      };
+
+    case types.GET_BLOCKED_AUTH_CONTEXT_DATA_FAIL:
+      return {
+        ...state,
+        blockedAuthContextData: [],
+        contextAuthError: payload ? payload : null,
+      };
+
+    case types.DELETE_CONTEXT_AUTH_DATA_FAIL:
+    case types.UNBLOCK_CONTEXT_AUTH_DATA_FAIL:
+    case types.BLOCK_CONTEXT_AUTH_DATA_FAIL:
+      return {
+        ...state,
+        contextAuthError: payload ? payload : null,
+      };
+
+    case types.CLEAR_MESSAGE:
+      return {
+        ...state,
+        successMessage: null,
+        signInError: null,
+        signUpError: [],
+      };
+
+    default:
+      return state;
+  }
+};
+
+export default authReducer;
+
+src/redux/reducers/posts.js
+import * as types from "../constants/postConstants";
+import { LOGOUT } from "../constants/authConstants";
+
+const initialState = {
+  post: null,
+  posts: [],
+  publicPosts: [],
+  ownPost: null,
+  savedPosts: [],
+  totalPosts: 0,
+  communityPosts: [],
+  followingUsersPosts: [],
+  totalCommunityPosts: 0,
+  postError: null,
+  postCategory: null,
+  confirmationToken: null,
+  isPostInappropriate: false,
+  isCommentInappropriate: false,
+};
+
+const postsReducer = (state = initialState, action) => {
+  const { type, payload } = action;
+
+  switch (type) {
+    case LOGOUT:
+      return {
+        ...state,
+        post: null,
+        posts: [],
+        publicPosts: [],
+        ownPost: null,
+        savedPosts: [],
+        totalPosts: 0,
+        communityPosts: [],
+        followingUsersPosts: [],
+        totalCommunityPosts: 0,
+        postError: null,
+        commentError: null,
+        postCategory: null,
+        confirmationToken: null,
+        isPostInappropriate: false,
+        isCommentInappropriate: false,
+      };
+
+    case types.CREATE_POST_SUCCESS:
+    case types.CONFIRM_POST_SUCCESS:
+      return {
+        ...state,
+        posts: [payload, ...state.posts],
+        communityPosts: [payload, ...state.communityPosts],
+        postError: null,
+        postCategory: null,
+        confirmationToken: null,
+        isPostInappropriate: false,
+      };
+
+    case types.CREATE_POST_FAIL:
+    case types.CONFIRM_POST_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+
+    case types.CREATE_POST_FAIL_INAPPROPRIATE:
+      return {
+        ...state,
+        isPostInappropriate: true,
+      };
+
+    case types.CREATE_POST_FAIL_DETECT_CATEGORY:
+      return {
+        ...state,
+        confirmationToken: payload,
+      };
+
+    case types.CREATE_POST_FAIL_CATEGORY_MISMATCH:
+      return {
+        ...state,
+        postCategory: payload,
+      };
+
+    case types.CLEAR_CREATE_POST_FAIL:
+      return {
+        ...state,
+        postError: null,
+        postCategory: null,
+        confirmationToken: null,
+        isPostInappropriate: false,
+      };
+
+    case types.GET_POST_SUCCESS:
+      return {
+        ...state,
+        post: payload,
+        postError: null,
+      };
+    case types.GET_POST_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+
+    case types.GET_OWN_POST_SUCCESS:
+      return {
+        ...state,
+        ownPost: payload,
+        postError: null,
+      };
+    case types.GET_OWN_POST_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+
+    case types.CLEAR_POST:
+      return {
+        ...state,
+        post: null,
+        comments: [],
+      };
+
+    case types.CLEAR_POSTS:
+      return {
+        ...state,
+        posts: [],
+        totalPosts: 0,
+      };
+
+    case types.CLEAR_COMMUNITY_POSTS:
+      return {
+        ...state,
+        communityPosts: [],
+        totalCommunityPosts: 0,
+      };
+
+    case types.GET_POSTS_SUCCESS:
+      if (payload.page === 1) {
+        return {
+          ...state,
+          posts: payload ? payload.posts : [],
+          totalPosts: payload ? payload.totalPosts : 0,
+          postError: null,
+        };
+      } else {
+        const existingPosts = state.posts.map((post) => post._id);
+        const newPosts = (payload ? payload.posts : []).filter(
+          (post) => !existingPosts.includes(post._id)
+        );
+        return {
+          ...state,
+          posts: [...state.posts, ...newPosts],
+          totalPosts: payload ? payload.totalPosts : 0,
+          postError: null,
+        };
+      }
+
+    case types.GET_POSTS_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+
+    case types.GET_COMMUNITY_POSTS_SUCCESS:
+      if (payload.page === 1) {
+        return {
+          ...state,
+          communityPosts: payload ? payload.posts : [],
+          totalCommunityPosts: payload ? payload.totalCommunityPosts : 0,
+          postError: null,
+        };
+      } else {
+        return {
+          ...state,
+          communityPosts: [
+            ...state.communityPosts,
+            ...(payload ? payload.posts : []),
+          ],
+          totalCommunityPosts: payload ? payload.totalCommunityPosts : 0,
+          postError: null,
+        };
+      }
+
+    case types.GET_COMMUNITY_POSTS_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+
+    case types.GET_FOLLOWING_USERS_POSTS_SUCCESS:
+      return {
+        ...state,
+        followingUsersPosts: payload ? payload : [],
+        postError: null,
+      };
+
+    case types.GET_FOLLOWING_USERS_POSTS_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+
+    case types.DELETE_POST_SUCCESS:
+      return {
+        ...state,
+        posts: state.posts.filter((post) => post._id !== payload),
+        communityPosts: state.communityPosts.filter(
+          (post) => post._id !== payload
+        ),
+        postError: null,
+        totalPosts: state.totalPosts - 1,
+        totalCommunityPosts: state.totalCommunityPosts - 1,
+      };
+    case types.DELETE_POST_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+
+    case types.UPDATE_POST_SUCCESS:
+      return {
+        ...state,
+        posts: state.posts.map((post) =>
+          post._id === payload._id ? payload : post
+        ),
+        communityPosts: state.communityPosts.map((post) =>
+          post._id === payload._id ? payload : post
+        ),
+        postError: null,
+      };
+    case types.UPDATE_POST_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+
+    case types.ADD_COMMENT_FAIL:
+      return {
+        ...state,
+        commentError: payload,
+      };
+
+    case types.ADD_COMMENT_FAIL_INAPPROPRIATE:
+      return {
+        ...state,
+        isCommentInappropriate: true,
+      };
+
+    case types.CLEAR_COMMENT_FAIL:
+      return {
+        ...state,
+        commentError: null,
+        isCommentInappropriate: false,
+      };
+
+    case types.LIKE_POST_SUCCESS:
+    case types.UNLIKE_POST_SUCCESS:
+      const { posts, communityPosts } = updatePostLike(state, payload);
+      return {
+        ...state,
+        posts,
+        communityPosts,
+        postError: null,
+      };
+    case types.LIKE_POST_FAIL:
+    case types.UNLIKE_POST_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+
+    case types.SAVE_POST_SUCCESS:
+    case types.UNSAVE_POST_SUCCESS:
+    case types.GET_SAVED_POSTS_SUCCESS:
+      return {
+        ...state,
+        savedPosts: payload ? payload : [],
+        postError: null,
+      };
+    case types.SAVE_POST_FAIL:
+    case types.UNSAVE_POST_FAIL:
+    case types.GET_SAVED_POSTS_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+
+    case types.GET_PUBLIC_POSTS_SUCCESS:
+      return {
+        ...state,
+        publicPosts: payload ? payload : [],
+        postError: null,
+      };
+    case types.GET_PUBLIC_POSTS_FAIL:
+      return {
+        ...state,
+        postError: payload,
+      };
+    case types.INCREASE_SAVED_BY_COUNT:
+      return {
+        ...state,
+        post:
+          state.post && state.post._id === payload
+            ? {
+                ...state.post,
+                savedByCount: state.post.savedByCount + 1,
+              }
+            : state.post,
+
+        postError: null,
+      };
+    case types.DECREASE_SAVED_BY_COUNT:
+      return {
+        ...state,
+        post:
+          state.post && state.post._id === payload
+            ? {
+                ...state.post,
+                savedByCount: state.post.savedByCount - 1,
+              }
+            : state.post,
+
+        postError: null,
+      };
+
+    default:
+      return state;
+  }
+};
+
+const updatePostLike = (state, updatedPost) => {
+  const posts = state.posts.map((post) =>
+    post._id === updatedPost._id ? updatedPost : post
+  );
+  const communityPosts = state.communityPosts.map((post) =>
+    post._id === updatedPost._id ? updatedPost : post
+  );
+  return { posts, communityPosts };
+};
+
+export default postsReducer;
