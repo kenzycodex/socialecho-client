@@ -2,6 +2,7 @@
   "name": "client",
   "version": "0.1.0",
   "private": true,
+  "proxy": "https://socialecho-server-production.up.railway.app",
   "dependencies": {
     "@headlessui/react": "^1.7.13",
     "@heroicons/react": "^1.0.6",
