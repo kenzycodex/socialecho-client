@@ -1,35 +1,47 @@
 import { useNavigate, useLocation } from "react-router";
 import { useMemo } from "react";
+import noPost from "../../assets/nopost.jpg";
 
 const PostOnProfile = ({ post }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { content, fileUrl, community, createdAt, comments, likes, isMember } =
-    post;
-
   const isImageFile = useMemo(() => {
+    if (!post?.fileUrl) return false;
     const validExtensions = [".jpg", ".png", ".jpeg", ".gif", ".webp", ".svg"];
-    const fileExtension = fileUrl?.slice(fileUrl.lastIndexOf("."));
+    const fileExtension = post.fileUrl.slice(post.fileUrl.lastIndexOf(".")).toLowerCase();
     return validExtensions.includes(fileExtension);
-  }, [fileUrl]);
+  }, [post?.fileUrl]);
+
+  // Early return checks after all hooks
+  if (!post) {
+    return null;
+  }
+
+  const { content, fileUrl, community, createdAt, comments = [], likes = [], isMember } = post;
+
+  if (!community) {
+    return null;
+  }
+
+  const handlePostClick = () => {
+    if (isMember && post._id) {
+      navigate(`/my/post/${post._id}`, {
+        state: { from: location.pathname },
+      });
+    }
+  };
 
   return (
     <div
       className={`bg-white rounded-md p-3 border my-2 cursor-pointer transition-all duration-300 ${
         isMember ? "hover:shadow-md" : "opacity-50 pointer-events-none"
       }`}
-      onClick={() => {
-        if (isMember) {
-          navigate(`/my/post/${post._id}`, {
-            state: { from: location.pathname },
-          });
-        }
-      }}
+      onClick={handlePostClick}
     >
       <div className="flex items-center">
         <p className="text-sm text-gray-500">
-          Posted in {community.name} on {createdAt}
+          Posted in {community.name} • {createdAt}
         </p>
       </div>
       <div className="my-3">
@@ -39,8 +51,12 @@ const PostOnProfile = ({ post }) => {
             <img
               className="w-full h-full object-cover rounded-md cursor-pointer"
               src={fileUrl}
-              alt={content}
+              alt={content || "Post image"}
               loading="lazy"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = {noPost};
+              }}
             />
           </div>
         ) : (
@@ -50,6 +66,10 @@ const PostOnProfile = ({ post }) => {
                 className="w-full h-full object-cover rounded-md cursor-pointer"
                 src={fileUrl}
                 controls
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.style.display = "none";
+                }}
               />
             </div>
           )
@@ -57,10 +77,10 @@ const PostOnProfile = ({ post }) => {
         <div className="flex justify-between items-center mt-2">
           <div className="flex items-center space-x-4">
             <span className="text-sm text-gray-500">
-              {comments.length} {comments.length === 1 ? "Comment" : "Comments"}
+              {comments?.length || 0} {(comments?.length === 1) ? "Comment" : "Comments"}
             </span>
             <span className="text-sm text-gray-500">
-              {likes.length} {likes.length === 1 ? "Like" : "Likes"}
+              {likes?.length || 0} {(likes?.length === 1) ? "Like" : "Likes"}
             </span>
           </div>
         </div>
